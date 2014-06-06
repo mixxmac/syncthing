@@ -13,12 +13,16 @@ import (
 )
 
 func loadCert(dir string) (tls.Certificate, error) {
-	return tls.LoadX509KeyPair(filepath.Join(dir, "cert.pem"), filepath.Join(dir, "key.pem"))
+	cf := filepath.Join(dir, "cert.pem")
+	kf := filepath.Join(dir, "key.pem")
+	return tls.LoadX509KeyPair(cf, kf)
 }
 
 func certID(bs []byte) string {
 	hf := sha256.New()
 	hf.Write(bs)
-	id := hf.Sum(nil)
-	return strings.Trim(base32.StdEncoding.EncodeToString(id), "=")
+	id := base32.StdEncoding.EncodeToString(hf.Sum(nil))
+	id = strings.Trim(id, "=")
+	id = strings.ToLower(id)
+	return id
 }

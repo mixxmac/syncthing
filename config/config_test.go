@@ -42,10 +42,10 @@ func TestNodeConfig(t *testing.T) {
 	v1data := []byte(`
 <configuration version="1">
     <repository id="test" directory="~/Sync">
-        <node id="NODE1" name="node one">
+        <node id="node1" name="node one">
             <address>a</address>
         </node>
-        <node id="NODE2" name="node two">
+        <node id="node2" name="node two">
             <address>b</address>
         </node>
     </repository>
@@ -58,20 +58,20 @@ func TestNodeConfig(t *testing.T) {
 	v2data := []byte(`
 <configuration version="2">
     <repository id="test" directory="~/Sync" ro="true">
-        <node id="NODE1"/>
-        <node id="NODE2"/>
+        <node id="node1"/>
+        <node id="node2"/>
     </repository>
-    <node id="NODE1" name="node one">
+    <node id="node1" name="node one">
         <address>a</address>
     </node>
-    <node id="NODE2" name="node two">
+    <node id="node2" name="node two">
         <address>b</address>
     </node>
 </configuration>
 `)
 
 	for i, data := range [][]byte{v1data, v2data} {
-		cfg, err := Load(bytes.NewReader(data), "NODE1")
+		cfg, err := Load(bytes.NewReader(data), "node1")
 		if err != nil {
 			t.Error(err)
 		}
@@ -80,23 +80,23 @@ func TestNodeConfig(t *testing.T) {
 			{
 				ID:        "test",
 				Directory: "~/Sync",
-				Nodes:     []NodeConfiguration{{NodeID: "NODE1"}, {NodeID: "NODE2"}},
+				Nodes:     []NodeConfiguration{{NodeID: "node1"}, {NodeID: "node2"}},
 				ReadOnly:  true,
 			},
 		}
 		expectedNodes := []NodeConfiguration{
 			{
-				NodeID:    "NODE1",
+				NodeID:    "node1",
 				Name:      "node one",
 				Addresses: []string{"a"},
 			},
 			{
-				NodeID:    "NODE2",
+				NodeID:    "node2",
 				Name:      "node two",
 				Addresses: []string{"b"},
 			},
 		}
-		expectedNodeIDs := []string{"NODE1", "NODE2"}
+		expectedNodeIDs := []string{"node1", "node2"}
 
 		if cfg.Version != 2 {
 			t.Errorf("%d: Incorrect version %d != 2", i, cfg.Version)
@@ -204,65 +204,20 @@ func TestNodeAddresses(t *testing.T) {
 	name, _ := os.Hostname()
 	expected := []NodeConfiguration{
 		{
-			NodeID:    "N1",
+			NodeID:    "n1",
 			Addresses: []string{"dynamic"},
 		},
 		{
-			NodeID:    "N2",
+			NodeID:    "n2",
 			Addresses: []string{"dynamic"},
 		},
 		{
-			NodeID:    "N3",
+			NodeID:    "n3",
 			Addresses: []string{"dynamic"},
 		},
 		{
-			NodeID:    "N4",
+			NodeID:    "n4",
 			Name:      name, // Set when auto created
-			Addresses: []string{"dynamic"},
-		},
-	}
-
-	cfg, err := Load(bytes.NewReader(data), "N4")
-	if err != nil {
-		t.Error(err)
-	}
-
-	if !reflect.DeepEqual(cfg.Nodes, expected) {
-		t.Errorf("Nodes differ;\n  E: %#v\n  A: %#v", expected, cfg.Nodes)
-	}
-}
-
-func TestStripNodeIs(t *testing.T) {
-	data := []byte(`
-<configuration version="2">
-    <node id="AAAA-BBBB-CCCC">
-        <address>dynamic</address>
-    </node>
-    <node id="AAAA BBBB DDDD">
-        <address></address>
-    </node>
-    <node id="AAAABBBBEEEE">
-        <address></address>
-    </node>
-    <repository directory="~/Sync">
-        <node id="AAA ABBB-BCC CC" name=""></node>
-        <node id="AA-AAB BBBD-DDD" name=""></node>
-        <node id="AAA AB-BBB EEE-E" name=""></node>
-    </repository>
-</configuration>
-`)
-
-	expected := []NodeConfiguration{
-		{
-			NodeID:    "AAAABBBBCCCC",
-			Addresses: []string{"dynamic"},
-		},
-		{
-			NodeID:    "AAAABBBBDDDD",
-			Addresses: []string{"dynamic"},
-		},
-		{
-			NodeID:    "AAAABBBBEEEE",
 			Addresses: []string{"dynamic"},
 		},
 	}
@@ -272,12 +227,7 @@ func TestStripNodeIs(t *testing.T) {
 		t.Error(err)
 	}
 
-	for i := range expected {
-		if !reflect.DeepEqual(cfg.Nodes[i], expected[i]) {
-			t.Errorf("Nodes[%d] differ;\n  E: %#v\n  A: %#v", i, expected[i], cfg.Nodes[i])
-		}
-		if cfg.Repositories[0].Nodes[i].NodeID != expected[i].NodeID {
-			t.Errorf("Repo nodes[%d] differ;\n  E: %#v\n  A: %#v", i, expected[i].NodeID, cfg.Repositories[0].Nodes[i].NodeID)
-		}
+	if !reflect.DeepEqual(cfg.Nodes, expected) {
+		t.Errorf("Nodes differ;\n  E: %#v\n  A: %#v", expected, cfg.Nodes)
 	}
 }

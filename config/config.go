@@ -13,10 +13,10 @@ import (
 	"reflect"
 	"sort"
 	"strconv"
-	"strings"
 
 	"code.google.com/p/go.crypto/bcrypt"
 	"github.com/calmh/syncthing/logger"
+	"github.com/calmh/syncthing/protocol"
 )
 
 var l = logger.DefaultLogger
@@ -86,16 +86,16 @@ func (c *VersioningConfiguration) UnmarshalXML(d *xml.Decoder, start xml.StartEl
 func (r *RepositoryConfiguration) NodeIDs() []string {
 	if r.nodeIDs == nil {
 		for _, n := range r.Nodes {
-			r.nodeIDs = append(r.nodeIDs, n.NodeID)
+			r.nodeIDs = append(r.nodeIDs, n.NodeID.String())
 		}
 	}
 	return r.nodeIDs
 }
 
 type NodeConfiguration struct {
-	NodeID    string   `xml:"id,attr"`
-	Name      string   `xml:"name,attr,omitempty"`
-	Addresses []string `xml:"address,omitempty"`
+	NodeID    protocol.NodeID `xml:"id,attr"`
+	Name      string          `xml:"name,attr,omitempty"`
+	Addresses []string        `xml:"address,omitempty"`
 }
 
 type OptionsConfiguration struct {
@@ -212,7 +212,7 @@ func uniqueStrings(ss []string) []string {
 	return us
 }
 
-func Load(rd io.Reader, myID string) (Configuration, error) {
+func Load(rd io.Reader, myID protocol.NodeID) (Configuration, error) {
 	var cfg Configuration
 
 	setDefaults(&cfg)
@@ -233,15 +233,6 @@ func Load(rd io.Reader, myID string) (Configuration, error) {
 		cfg.Repositories = []RepositoryConfiguration{}
 	}
 
-	// Sanitize node IDs
-	for i := range cfg.Nodes {
-		node := &cfg.Nodes[i]
-		// Strip spaces and dashes
-		node.NodeID = strings.Replace(node.NodeID, "-", "", -1)
-		node.NodeID = strings.Replace(node.NodeID, " ", "", -1)
-		node.NodeID = strings.ToUpper(node.NodeID)
-	}
-
 	// Check for missing, bad or duplicate repository ID:s
 	var seenRepos = map[string]*RepositoryConfiguration{}
 	var uniqueCounter int
@@ -255,13 +246,6 @@ func Load(rd io.Reader, myID string) (Configuration, error) {
 
 		if repo.ID == "" {
 			repo.ID = "default"
-		}
-
-		for i := range repo.Nodes {
-			node := &repo.Nodes[i]
-			// Strip spaces and dashes
-			node.NodeID = strings.Replace(node.NodeID, "-", "", -1)
-			node.NodeID = strings.Replace(node.NodeID, " ", "", -1)
 		}
 
 		if seen, ok := seenRepos[repo.ID]; ok {
@@ -320,8 +304,9 @@ func convertV1V2(cfg *Configuration) {
 	for i, repo := range cfg.Repositories {
 		cfg.Repositories[i].ReadOnly = cfg.Options.Deprecated_ReadOnly
 		for j, node := range repo.Nodes {
-			if _, ok := nodes[node.NodeID]; !ok {
-				nodes[node.NodeID] = node
+			id := node.NodeID.String()
+			if _, ok := nodes[id]; !ok {
+				nodes[id] = node
 			}
 			cfg.Repositories[i].Nodes[j] = NodeConfiguration{NodeID: node.NodeID}
 		}
@@ -346,7 +331,7 @@ func convertV1V2(cfg *Configuration) {
 type NodeConfigurationList []NodeConfiguration
 
 func (l NodeConfigurationList) Less(a, b int) bool {
-	return l[a].NodeID < l[b].NodeID
+	return l[a].NodeID.Compare(l[b].NodeID) == -1
 }
 func (l NodeConfigurationList) Swap(a, b int) {
 	l[a], l[b] = l[b], l[a]
@@ -355,10 +340,10 @@ func (l NodeConfigurationList) Len() int {
 	return len(l)
 }
 
-func ensureNodePresent(nodes []NodeConfiguration, myID string) []NodeConfiguration {
+func ensureNodePresent(nodes []NodeConfiguration, myID protocol.NodeID) []NodeConfiguration {
 	var myIDExists bool
 	for _, node := range nodes {
-		if node.NodeID == myID {
+		if node.NodeID.Equals(myID) {
 			myIDExists = true
 			break
 		}
