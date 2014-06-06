@@ -18,7 +18,7 @@ func NewNodeID(rawCert []byte) NodeID {
 	var n NodeID
 	hf := sha256.New()
 	hf.Write(rawCert)
-	hf.Sum(n[:])
+	hf.Sum(n[:0])
 	return n
 }
 
@@ -50,6 +50,10 @@ func (n NodeID) Equals(other NodeID) bool {
 	return bytes.Compare(n[:], other[:]) == 0
 }
 
+func (n *NodeID) MarshalText() ([]byte, error) {
+	return []byte(n.String()), nil
+}
+
 func (n *NodeID) UnmarshalText(bs []byte) error {
 	id := string(bs)
 	id = strings.Trim(id, "=")
@@ -57,7 +61,8 @@ func (n *NodeID) UnmarshalText(bs []byte) error {
 	id = strings.Replace(id, "-", "", -1)
 	id = strings.Replace(id, " ", "", -1)
 
-	dec, err := base32.StdEncoding.DecodeString(id)
+	l.Debugln(id)
+	dec, err := base32.StdEncoding.DecodeString(id[:52] + "====")
 	if err != nil {
 		return err
 	}

@@ -176,7 +176,7 @@ func main() {
 	}
 
 	myID = protocol.NewNodeID(cert.Certificate[0])
-	l.SetPrefix(fmt.Sprintf("[%s] ", myID[:5]))
+	l.SetPrefix(fmt.Sprintf("[%s] ", myID.String()[:5]))
 
 	l.Infoln(LongVersion)
 	l.Infoln("My ID:", myID)
