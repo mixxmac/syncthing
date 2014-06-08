@@ -15,7 +15,9 @@ var formatCases = [][2]string{
 
 func TestFormatNodeID(t *testing.T) {
 	for _, tc := range formatCases {
-		if f := FormatNodeID(tc[0]); f != tc[1] {
+		var id NodeID
+		id.UnmarshalText([]byte(tc[0]))
+		if f := id.String(); f != tc[1] {
 			t.Errorf("FormatNodeID(%q); %q != %q", tc[0], f, tc[1])
 		}
 	}
@@ -37,9 +39,10 @@ var validateCases = []struct {
 
 func TestValidateNodeID(t *testing.T) {
 	for _, tc := range validateCases {
-		r := ValidateNodeID(tc.s)
-		if (r == nil && !tc.ok) || (r != nil && tc.ok) {
-			t.Errorf("ValidateNodeID(%q); %v != %v", tc.s, r, tc.ok)
+		var id NodeID
+		err := id.UnmarshalText([]byte(tc.s))
+		if (err == nil && !tc.ok) || (err != nil && tc.ok) {
+			t.Errorf("ValidateNodeID(%q); %v != %v", tc.s, err, tc.ok)
 		}
 	}
 }

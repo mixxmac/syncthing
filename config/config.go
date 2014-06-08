@@ -15,10 +15,10 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/calmh/syncthing/scanner"
 	"code.google.com/p/go.crypto/bcrypt"
 	"github.com/calmh/syncthing/logger"
 	"github.com/calmh/syncthing/protocol"
+	"github.com/calmh/syncthing/scanner"
 )
 
 var l = logger.DefaultLogger
@@ -171,8 +171,8 @@ type GUIConfiguration struct {
 	APIKey   string `xml:"apikey,omitempty"`
 }
 
-func (cfg *Configuration) NodeMap() map[string]NodeConfiguration {
-	m := make(map[string]NodeConfiguration, len(cfg.Nodes))
+func (cfg *Configuration) NodeMap() map[protocol.NodeID]NodeConfiguration {
+	m := make(map[protocol.NodeID]NodeConfiguration, len(cfg.Nodes))
 	for _, n := range cfg.Nodes {
 		m[n.NodeID] = n
 	}

@@ -329,7 +329,7 @@ func (m *Model) IndexUpdate(nodeID protocol.NodeID, repo string, fs []protocol.F
 	m.rmut.RUnlock()
 }
 
-func (m *Model) repoSharedWith(repo, nodeID string) bool {
+func (m *Model) repoSharedWith(repo string, nodeID protocol.NodeID) bool {
 	m.rmut.RLock()
 	defer m.rmut.RUnlock()
 	for _, nrepo := range m.nodeRepos[nodeID] {
