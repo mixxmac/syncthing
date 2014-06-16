@@ -32,6 +32,7 @@ type Set struct {
 	changes            [64]uint64
 	globalAvailability map[string]bitset
 	globalKey          map[string]key
+	globalVersion      map[string]uint64
 	repo               string
 	db                 *bolt.DB
 }
@@ -41,6 +42,7 @@ func NewSet(repo string, db *bolt.DB) *Set {
 		files:              make(map[key]fileRecord),
 		globalAvailability: make(map[string]bitset),
 		globalKey:          make(map[string]key),
+		globalVersion:      make(map[string]uint64),
 		repo:               repo,
 		db:                 db,
 	}
@@ -93,6 +95,30 @@ func (m *Set) ReplaceWithDelete(id uint, fs []scanner.File) {
 	if id > 63 {
 		panic("Connection ID must be in the range 0 - 63 inclusive")
 	}
+
+	// TODO: Delete handling
+	m.db.Update(func(tx *bolt.Tx) error {
+		rootBkt, err := tx.CreateBucketIfNotExists([]byte("files"))
+		if err != nil {
+			return err
+		}
+
+		bktName := []byte(strconv.FormatUint(uint64(id), 16))
+		rootBkt.DeleteBucket(bktName)
+		bkt, err := rootBkt.CreateBucket(bktName)
+		if err != nil {
+			l.Infoln("cannot create", id)
+			return err
+		}
+		l.Infoln("created", bktName)
+		for _, f := range fs {
+			key := []byte(fmt.Sprintf("%s/%s", m.repo, f.Name))
+			bkt.Put(key, f.MarshalXDR())
+			l.Infoln("put files", id, m.repo, f.Name)
+
+		}
+		return nil
+	})
 
 	m.Lock()
 	if len(fs) == 0 || !m.equals(id, fs) {

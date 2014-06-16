@@ -19,6 +19,20 @@ import (
 	"github.com/calmh/syncthing/scanner"
 )
 
+func genBlocks(n int) []scanner.Block {
+	b := make([]scanner.Block, n)
+	for i := range b {
+		h := make([]byte, 32)
+		for j := range h {
+			h[j] = byte(i + j)
+		}
+		b[i].Size = uint32(i)
+		b[i].Offset = int64(i)
+		b[i].Hash = h
+	}
+	return b
+}
+
 type fileList []scanner.File
 
 func (l fileList) Len() int {
@@ -44,43 +58,43 @@ func TestGlobalSet(t *testing.T) {
 	m := files.NewSet("test", db)
 
 	local := []scanner.File{
-		scanner.File{Name: "a", Version: 1000},
-		scanner.File{Name: "b", Version: 1000},
-		scanner.File{Name: "c", Version: 1000},
-		scanner.File{Name: "d", Version: 1000},
+		scanner.File{Name: "a", Version: 1000, Blocks: genBlocks(1)},
+		scanner.File{Name: "b", Version: 1000, Blocks: genBlocks(2)},
+		scanner.File{Name: "c", Version: 1000, Blocks: genBlocks(3)},
+		scanner.File{Name: "d", Version: 1000, Blocks: genBlocks(4)},
 	}
 
 	remote0 := []scanner.File{
-		scanner.File{Name: "a", Version: 1000},
-		scanner.File{Name: "c", Version: 1002},
+		scanner.File{Name: "a", Version: 1000, Blocks: genBlocks(1)},
+		scanner.File{Name: "c", Version: 1002, Blocks: genBlocks(5)},
 	}
 	remote1 := []scanner.File{
-		scanner.File{Name: "b", Version: 1001},
-		scanner.File{Name: "e", Version: 1000},
+		scanner.File{Name: "b", Version: 1001, Blocks: genBlocks(6)},
+		scanner.File{Name: "e", Version: 1000, Blocks: genBlocks(7)},
 	}
 	remoteTot := []scanner.File{
-		scanner.File{Name: "a", Version: 1000},
-		scanner.File{Name: "b", Version: 1001},
-		scanner.File{Name: "c", Version: 1002},
-		scanner.File{Name: "e", Version: 1000},
+		remote0[0],
+		remote1[0],
+		remote0[1],
+		remote1[1],
 	}
 
 	expectedGlobal := []scanner.File{
-		scanner.File{Name: "a", Version: 1000},
-		scanner.File{Name: "b", Version: 1001},
-		scanner.File{Name: "c", Version: 1002},
-		scanner.File{Name: "d", Version: 1000},
-		scanner.File{Name: "e", Version: 1000},
+		remote0[0],
+		remote1[0],
+		remote0[1],
+		local[3],
+		remote1[1],
 	}
 
 	expectedLocalNeed := []scanner.File{
-		scanner.File{Name: "b", Version: 1001},
-		scanner.File{Name: "c", Version: 1002},
-		scanner.File{Name: "e", Version: 1000},
+		remote1[0],
+		remote0[1],
+		remote1[1],
 	}
 
 	expectedRemoteNeed := []scanner.File{
-		scanner.File{Name: "d", Version: 1000},
+		local[3],
 	}
 
 	m.ReplaceWithDelete(cid.LocalID, local)
