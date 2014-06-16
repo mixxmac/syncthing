@@ -6,10 +6,12 @@ package files_test
 
 import (
 	"fmt"
+	"os"
 	"reflect"
 	"sort"
 	"testing"
 
+	"github.com/boltdb/bolt"
 	"github.com/calmh/syncthing/cid"
 	"github.com/calmh/syncthing/files"
 	"github.com/calmh/syncthing/lamport"
@@ -32,7 +34,14 @@ func (l fileList) Swap(a, b int) {
 }
 
 func TestGlobalSet(t *testing.T) {
-	m := files.NewSet()
+	os.RemoveAll("testdata/index.db")
+	db, err := bolt.Open("testdata/index.db", 0660)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	m := files.NewSet("test", db)
 
 	local := []scanner.File{
 		scanner.File{Name: "a", Version: 1000},
@@ -143,7 +152,13 @@ func TestGlobalSet(t *testing.T) {
 }
 
 func TestLocalDeleted(t *testing.T) {
-	m := files.NewSet()
+	os.RemoveAll("testdata/index.db")
+	db, err := bolt.Open("testdata/index.db", 0660)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	m := files.NewSet("test", db)
 	lamport.Default = lamport.Clock{}
 
 	local1 := []scanner.File{
@@ -214,6 +229,13 @@ func TestLocalDeleted(t *testing.T) {
 }
 
 func Benchmark10kReplace(b *testing.B) {
+	os.RemoveAll("testdata/index.db")
+	db, err := bolt.Open("testdata/index.db", 0660)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer db.Close()
+
 	var local []scanner.File
 	for i := 0; i < 10000; i++ {
 		local = append(local, scanner.File{Name: fmt.Sprintf("file%d", i), Version: 1000})
@@ -221,7 +243,7 @@ func Benchmark10kReplace(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		m := files.NewSet()
+		m := files.NewSet("test", db)
 		m.ReplaceWithDelete(cid.LocalID, local)
 	}
 }
@@ -232,7 +254,13 @@ func Benchmark10kUpdateChg(b *testing.B) {
 		remote = append(remote, scanner.File{Name: fmt.Sprintf("file%d", i), Version: 1000})
 	}
 
-	m := files.NewSet()
+	os.RemoveAll("testdata/index.db")
+	db, err := bolt.Open("testdata/index.db", 0660)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer db.Close()
+	m := files.NewSet("test", db)
 	m.Replace(1, remote)
 
 	var local []scanner.File
@@ -259,7 +287,13 @@ func Benchmark10kUpdateSme(b *testing.B) {
 		remote = append(remote, scanner.File{Name: fmt.Sprintf("file%d", i), Version: 1000})
 	}
 
-	m := files.NewSet()
+	os.RemoveAll("testdata/index.db")
+	db, err := bolt.Open("testdata/index.db", 0660)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer db.Close()
+	m := files.NewSet("test", db)
 	m.Replace(1, remote)
 
 	var local []scanner.File
@@ -281,7 +315,14 @@ func Benchmark10kNeed2k(b *testing.B) {
 		remote = append(remote, scanner.File{Name: fmt.Sprintf("file%d", i), Version: 1000})
 	}
 
-	m := files.NewSet()
+	os.RemoveAll("testdata/index.db")
+	db, err := bolt.Open("testdata/index.db", 0660)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer db.Close()
+
+	m := files.NewSet("test", db)
 	m.Replace(cid.LocalID+1, remote)
 
 	var local []scanner.File
@@ -309,7 +350,14 @@ func Benchmark10kHave(b *testing.B) {
 		remote = append(remote, scanner.File{Name: fmt.Sprintf("file%d", i), Version: 1000})
 	}
 
-	m := files.NewSet()
+	os.RemoveAll("testdata/index.db")
+	db, err := bolt.Open("testdata/index.db", 0660)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer db.Close()
+
+	m := files.NewSet("test", db)
 	m.Replace(cid.LocalID+1, remote)
 
 	var local []scanner.File
@@ -337,7 +385,14 @@ func Benchmark10kGlobal(b *testing.B) {
 		remote = append(remote, scanner.File{Name: fmt.Sprintf("file%d", i), Version: 1000})
 	}
 
-	m := files.NewSet()
+	os.RemoveAll("testdata/index.db")
+	db, err := bolt.Open("testdata/index.db", 0660)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer db.Close()
+
+	m := files.NewSet("test", db)
 	m.Replace(cid.LocalID+1, remote)
 
 	var local []scanner.File
@@ -360,7 +415,14 @@ func Benchmark10kGlobal(b *testing.B) {
 }
 
 func TestGlobalReset(t *testing.T) {
-	m := files.NewSet()
+	os.RemoveAll("testdata/index.db")
+	db, err := bolt.Open("testdata/index.db", 0660)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	m := files.NewSet("test", db)
 
 	local := []scanner.File{
 		scanner.File{Name: "a", Version: 1000},
@@ -396,7 +458,14 @@ func TestGlobalReset(t *testing.T) {
 }
 
 func TestNeed(t *testing.T) {
-	m := files.NewSet()
+	os.RemoveAll("testdata/index.db")
+	db, err := bolt.Open("testdata/index.db", 0660)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	m := files.NewSet("test", db)
 
 	local := []scanner.File{
 		scanner.File{Name: "a", Version: 1000},
@@ -432,7 +501,14 @@ func TestNeed(t *testing.T) {
 }
 
 func TestChanges(t *testing.T) {
-	m := files.NewSet()
+	os.RemoveAll("testdata/index.db")
+	db, err := bolt.Open("testdata/index.db", 0660)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	m := files.NewSet("test", db)
 
 	local1 := []scanner.File{
 		scanner.File{Name: "a", Version: 1000},

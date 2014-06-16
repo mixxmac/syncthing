@@ -6,8 +6,11 @@
 package files
 
 import (
+	"fmt"
+	"strconv"
 	"sync"
 
+	"github.com/boltdb/bolt"
 	"github.com/calmh/syncthing/cid"
 	"github.com/calmh/syncthing/lamport"
 	"github.com/calmh/syncthing/protocol"
@@ -29,13 +32,17 @@ type Set struct {
 	changes            [64]uint64
 	globalAvailability map[string]bitset
 	globalKey          map[string]key
+	repo               string
+	db                 *bolt.DB
 }
 
-func NewSet() *Set {
+func NewSet(repo string, db *bolt.DB) *Set {
 	var m = Set{
 		files:              make(map[key]fileRecord),
 		globalAvailability: make(map[string]bitset),
 		globalKey:          make(map[string]key),
+		repo:               repo,
+		db:                 db,
 	}
 	return &m
 }
@@ -47,6 +54,29 @@ func (m *Set) Replace(id uint, fs []scanner.File) {
 	if id > 63 {
 		panic("Connection ID must be in the range 0 - 63 inclusive")
 	}
+
+	m.db.Update(func(tx *bolt.Tx) error {
+		rootBkt, err := tx.CreateBucketIfNotExists([]byte("files"))
+		if err != nil {
+			return err
+		}
+
+		bktName := []byte(strconv.FormatUint(uint64(id), 16))
+		rootBkt.DeleteBucket(bktName)
+		bkt, err := rootBkt.CreateBucket(bktName)
+		if err != nil {
+			l.Infoln("cannot create", id)
+			return err
+		}
+		l.Infoln("created", bktName)
+		for _, f := range fs {
+			key := []byte(fmt.Sprintf("%s/%s", m.repo, f.Name))
+			bkt.Put(key, f.MarshalXDR())
+			l.Infoln("put files", id, m.repo, f.Name)
+
+		}
+		return nil
+	})
 
 	m.Lock()
 	if len(fs) == 0 || !m.equals(id, fs) {
@@ -102,6 +132,28 @@ func (m *Set) Update(id uint, fs []scanner.File) {
 	if debug {
 		l.Debugf("Update(%d, [%d])", id, len(fs))
 	}
+
+	m.db.Update(func(tx *bolt.Tx) error {
+		rootBkt := tx.Bucket([]byte("files"))
+		if rootBkt == nil {
+			return nil
+		}
+
+		bktName := []byte(strconv.FormatUint(uint64(id), 16))
+		bkt := rootBkt.Bucket(bktName)
+		if bkt == nil {
+			return nil
+		}
+
+		for _, f := range fs {
+			key := []byte(fmt.Sprintf("%s/%s", m.repo, f.Name))
+			bkt.Put(key, f.MarshalXDR())
+			l.Infoln("put files", id, m.repo, f.Name)
+		}
+
+		return nil
+	})
+
 	m.Lock()
 	m.update(id, fs)
 	m.changes[id]++
@@ -137,12 +189,35 @@ func (m *Set) Have(id uint) []scanner.File {
 	if debug {
 		l.Debugf("Have(%d)", id)
 	}
-	var fs = make([]scanner.File, 0, len(m.remoteKey[id]))
-	m.Lock()
-	for _, rk := range m.remoteKey[id] {
-		fs = append(fs, m.files[rk].File)
-	}
-	m.Unlock()
+
+	var fs []scanner.File
+
+	m.db.View(func(tx *bolt.Tx) error {
+		rootBkt := tx.Bucket([]byte("files"))
+		if rootBkt == nil {
+			l.Debugln("no root bkt")
+			return nil
+		}
+
+		bktName := []byte(strconv.FormatUint(uint64(id), 16))
+		bkt := rootBkt.Bucket(bktName)
+		if bkt == nil {
+			l.Debugln("no id bkt", bktName)
+			return nil
+		}
+
+		l.Debugln("iterating", bktName)
+		c := bkt.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			var f scanner.File
+			f.UnmarshalXDR(v)
+			l.Debugln(f)
+			fs = append(fs, f)
+		}
+
+		return nil
+	})
+
 	return fs
 }
 
