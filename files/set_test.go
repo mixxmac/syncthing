@@ -57,11 +57,25 @@ func TestGlobalSet(t *testing.T) {
 
 	m := files.NewSet("test", db)
 
-	local := []scanner.File{
+	local0 := []scanner.File{
 		scanner.File{Name: "a", Version: 1000, Blocks: genBlocks(1)},
 		scanner.File{Name: "b", Version: 1000, Blocks: genBlocks(2)},
 		scanner.File{Name: "c", Version: 1000, Blocks: genBlocks(3)},
 		scanner.File{Name: "d", Version: 1000, Blocks: genBlocks(4)},
+		scanner.File{Name: "z", Version: 1000, Blocks: genBlocks(8)},
+	}
+	local1 := []scanner.File{
+		scanner.File{Name: "a", Version: 1000, Blocks: genBlocks(1)},
+		scanner.File{Name: "b", Version: 1000, Blocks: genBlocks(2)},
+		scanner.File{Name: "c", Version: 1000, Blocks: genBlocks(3)},
+		scanner.File{Name: "d", Version: 1000, Blocks: genBlocks(4)},
+	}
+	localTot := []scanner.File{
+		local0[0],
+		local0[1],
+		local0[2],
+		local0[3],
+		scanner.File{Name: "z", Version: 1001, Flags: protocol.FlagDeleted},
 	}
 
 	remote0 := []scanner.File{
@@ -83,8 +97,9 @@ func TestGlobalSet(t *testing.T) {
 		remote0[0],
 		remote1[0],
 		remote0[1],
-		local[3],
+		localTot[3],
 		remote1[1],
+		localTot[4],
 	}
 
 	expectedLocalNeed := []scanner.File{
@@ -94,10 +109,12 @@ func TestGlobalSet(t *testing.T) {
 	}
 
 	expectedRemoteNeed := []scanner.File{
-		local[3],
+		local0[3],
+		localTot[4],
 	}
 
-	m.ReplaceWithDelete(cid.LocalID, local)
+	m.ReplaceWithDelete(cid.LocalID, local0)
+	m.ReplaceWithDelete(cid.LocalID, local1)
 	m.Replace(1, remote0)
 	m.Update(1, remote1)
 
@@ -111,8 +128,8 @@ func TestGlobalSet(t *testing.T) {
 	h := m.Have(cid.LocalID)
 	sort.Sort(fileList(h))
 
-	if !reflect.DeepEqual(h, local) {
-		t.Errorf("Have incorrect;\n A: %v !=\n E: %v", h, local)
+	if !reflect.DeepEqual(h, localTot) {
+		t.Errorf("Have incorrect;\n A: %v !=\n E: %v", h, localTot)
 	}
 
 	h = m.Have(1)
@@ -137,8 +154,8 @@ func TestGlobalSet(t *testing.T) {
 	}
 
 	f := m.Get(cid.LocalID, "b")
-	if !reflect.DeepEqual(f, local[1]) {
-		t.Errorf("Get incorrect;\n A: %v !=\n E: %v", f, local[1])
+	if !reflect.DeepEqual(f, localTot[1]) {
+		t.Errorf("Get incorrect;\n A: %v !=\n E: %v", f, localTot[1])
 	}
 
 	f = m.Get(1, "b")

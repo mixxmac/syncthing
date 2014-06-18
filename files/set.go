@@ -6,7 +6,7 @@
 package files
 
 import (
-	"fmt"
+	"errors"
 	"strconv"
 	"sync"
 
@@ -49,6 +49,64 @@ func NewSet(repo string, db *bolt.DB) *Set {
 	return &m
 }
 
+func boltReplace(id uint, repo string, fs []scanner.File) func(tx *bolt.Tx) error {
+	return func(tx *bolt.Tx) error {
+		bkt, err := tx.CreateBucketIfNotExists([]byte("files"))
+		if err != nil {
+			return err
+		}
+
+		bktName := []byte(strconv.FormatUint(uint64(id), 16))
+
+		bkt.DeleteBucket(bktName)
+		bkt, err = bkt.CreateBucket(bktName)
+		if err != nil {
+			return err
+		}
+
+		bkt, err = bkt.CreateBucket([]byte(repo))
+		if err != nil {
+			return err
+		}
+
+		return boltUpdateBucket(bkt, fs)
+	}
+}
+
+func boltUpdate(id uint, repo string, fs []scanner.File) func(tx *bolt.Tx) error {
+	return func(tx *bolt.Tx) error {
+		bkt, err := tx.CreateBucketIfNotExists([]byte("files"))
+		if err != nil {
+			return err
+		}
+
+		bktName := []byte(strconv.FormatUint(uint64(id), 16))
+
+		bkt, err = bkt.CreateBucketIfNotExists(bktName)
+		if err != nil {
+			return err
+		}
+
+		bkt, err = bkt.CreateBucketIfNotExists([]byte(repo))
+		if err != nil {
+			return err
+		}
+
+		return boltUpdateBucket(bkt, fs)
+	}
+}
+
+func boltUpdateBucket(bkt *bolt.Bucket, fs []scanner.File) error {
+	for _, f := range fs {
+		key := []byte(f.Name)
+		err := bkt.Put(key, f.MarshalXDR())
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (m *Set) Replace(id uint, fs []scanner.File) {
 	if debug {
 		l.Debugf("Replace(%d, [%d])", id, len(fs))
@@ -57,28 +115,7 @@ func (m *Set) Replace(id uint, fs []scanner.File) {
 		panic("Connection ID must be in the range 0 - 63 inclusive")
 	}
 
-	m.db.Update(func(tx *bolt.Tx) error {
-		rootBkt, err := tx.CreateBucketIfNotExists([]byte("files"))
-		if err != nil {
-			return err
-		}
-
-		bktName := []byte(strconv.FormatUint(uint64(id), 16))
-		rootBkt.DeleteBucket(bktName)
-		bkt, err := rootBkt.CreateBucket(bktName)
-		if err != nil {
-			l.Infoln("cannot create", id)
-			return err
-		}
-		l.Infoln("created", bktName)
-		for _, f := range fs {
-			key := []byte(fmt.Sprintf("%s/%s", m.repo, f.Name))
-			bkt.Put(key, f.MarshalXDR())
-			l.Infoln("put files", id, m.repo, f.Name)
-
-		}
-		return nil
-	})
+	m.db.Update(boltReplace(id, m.repo, fs))
 
 	m.Lock()
 	if len(fs) == 0 || !m.equals(id, fs) {
@@ -96,27 +133,45 @@ func (m *Set) ReplaceWithDelete(id uint, fs []scanner.File) {
 		panic("Connection ID must be in the range 0 - 63 inclusive")
 	}
 
-	// TODO: Delete handling
+	var nm = make(map[string]bool, len(fs))
+	for _, f := range fs {
+		nm[f.Name] = true
+	}
+
 	m.db.Update(func(tx *bolt.Tx) error {
-		rootBkt, err := tx.CreateBucketIfNotExists([]byte("files"))
+		err := boltUpdate(id, m.repo, fs)(tx)
 		if err != nil {
 			return err
+		}
+
+		bkt := tx.Bucket([]byte("files"))
+		if bkt == nil {
+			return errors.New("no root bucket")
 		}
 
 		bktName := []byte(strconv.FormatUint(uint64(id), 16))
-		rootBkt.DeleteBucket(bktName)
-		bkt, err := rootBkt.CreateBucket(bktName)
-		if err != nil {
-			l.Infoln("cannot create", id)
-			return err
+		bkt = bkt.Bucket(bktName)
+		if bkt == nil {
+			return errors.New("no id bucket")
 		}
-		l.Infoln("created", bktName)
-		for _, f := range fs {
-			key := []byte(fmt.Sprintf("%s/%s", m.repo, f.Name))
-			bkt.Put(key, f.MarshalXDR())
-			l.Infoln("put files", id, m.repo, f.Name)
 
+		bktName = []byte(m.repo)
+		bkt = bkt.Bucket(bktName)
+		if bkt == nil {
+			return errors.New("no repo bucket")
 		}
+
+		c := bkt.Cursor()
+		for k, v := c.First(); k != nil; k, v = c.Next() {
+			var f scanner.File
+			f.UnmarshalXDR(v)
+			if !nm[f.Name] && !protocol.IsDeleted(f.Flags) {
+				f.Flags |= protocol.FlagDeleted
+				f.Blocks = nil
+				bkt.Put(k, f.MarshalXDR())
+			}
+		}
+
 		return nil
 	})
 
@@ -159,26 +214,7 @@ func (m *Set) Update(id uint, fs []scanner.File) {
 		l.Debugf("Update(%d, [%d])", id, len(fs))
 	}
 
-	m.db.Update(func(tx *bolt.Tx) error {
-		rootBkt := tx.Bucket([]byte("files"))
-		if rootBkt == nil {
-			return nil
-		}
-
-		bktName := []byte(strconv.FormatUint(uint64(id), 16))
-		bkt := rootBkt.Bucket(bktName)
-		if bkt == nil {
-			return nil
-		}
-
-		for _, f := range fs {
-			key := []byte(fmt.Sprintf("%s/%s", m.repo, f.Name))
-			bkt.Put(key, f.MarshalXDR())
-			l.Infoln("put files", id, m.repo, f.Name)
-		}
-
-		return nil
-	})
+	m.db.Update(boltUpdate(id, m.repo, fs))
 
 	m.Lock()
 	m.update(id, fs)
@@ -219,25 +255,26 @@ func (m *Set) Have(id uint) []scanner.File {
 	var fs []scanner.File
 
 	m.db.View(func(tx *bolt.Tx) error {
-		rootBkt := tx.Bucket([]byte("files"))
-		if rootBkt == nil {
-			l.Debugln("no root bkt")
+		bkt := tx.Bucket([]byte("files"))
+		if bkt == nil {
 			return nil
 		}
 
 		bktName := []byte(strconv.FormatUint(uint64(id), 16))
-		bkt := rootBkt.Bucket(bktName)
+		bkt = bkt.Bucket(bktName)
 		if bkt == nil {
-			l.Debugln("no id bkt", bktName)
 			return nil
 		}
 
-		l.Debugln("iterating", bktName)
+		bkt = bkt.Bucket([]byte(m.repo))
+		if bkt == nil {
+			return nil
+		}
+
 		c := bkt.Cursor()
 		for k, v := c.First(); k != nil; k, v = c.Next() {
 			var f scanner.File
 			f.UnmarshalXDR(v)
-			l.Debugln(f)
 			fs = append(fs, f)
 		}
 
