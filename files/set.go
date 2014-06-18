@@ -49,64 +49,6 @@ func NewSet(repo string, db *bolt.DB) *Set {
 	return &m
 }
 
-func boltReplace(id uint, repo string, fs []scanner.File) func(tx *bolt.Tx) error {
-	return func(tx *bolt.Tx) error {
-		bkt, err := tx.CreateBucketIfNotExists([]byte("files"))
-		if err != nil {
-			return err
-		}
-
-		bktName := []byte(strconv.FormatUint(uint64(id), 16))
-
-		bkt.DeleteBucket(bktName)
-		bkt, err = bkt.CreateBucket(bktName)
-		if err != nil {
-			return err
-		}
-
-		bkt, err = bkt.CreateBucket([]byte(repo))
-		if err != nil {
-			return err
-		}
-
-		return boltUpdateBucket(bkt, fs)
-	}
-}
-
-func boltUpdate(id uint, repo string, fs []scanner.File) func(tx *bolt.Tx) error {
-	return func(tx *bolt.Tx) error {
-		bkt, err := tx.CreateBucketIfNotExists([]byte("files"))
-		if err != nil {
-			return err
-		}
-
-		bktName := []byte(strconv.FormatUint(uint64(id), 16))
-
-		bkt, err = bkt.CreateBucketIfNotExists(bktName)
-		if err != nil {
-			return err
-		}
-
-		bkt, err = bkt.CreateBucketIfNotExists([]byte(repo))
-		if err != nil {
-			return err
-		}
-
-		return boltUpdateBucket(bkt, fs)
-	}
-}
-
-func boltUpdateBucket(bkt *bolt.Bucket, fs []scanner.File) error {
-	for _, f := range fs {
-		key := []byte(f.Name)
-		err := bkt.Put(key, f.MarshalXDR())
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (m *Set) Replace(id uint, fs []scanner.File) {
 	if debug {
 		l.Debugf("Replace(%d, [%d])", id, len(fs))
@@ -165,9 +107,11 @@ func (m *Set) ReplaceWithDelete(id uint, fs []scanner.File) {
 		for k, v := c.First(); k != nil; k, v = c.Next() {
 			var f scanner.File
 			f.UnmarshalXDR(v)
-			if !nm[f.Name] && !protocol.IsDeleted(f.Flags) {
+			if !protocol.IsDeleted(f.Flags) && !nm[f.Name] {
+				f.Version = lamport.Default.Tick(f.Version)
 				f.Flags |= protocol.FlagDeleted
 				f.Blocks = nil
+				f.Size = 0
 				bkt.Put(k, f.MarshalXDR())
 			}
 		}

@@ -110,7 +110,6 @@ func TestGlobalSet(t *testing.T) {
 
 	expectedRemoteNeed := []scanner.File{
 		local0[3],
-		localTot[4],
 	}
 
 	m.ReplaceWithDelete(cid.LocalID, local0)
