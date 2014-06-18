@@ -22,7 +22,7 @@ var testdata = []struct {
 }
 
 var correctIgnores = map[string][]string{
-	"": {".*", "quux"},
+	".": {".*", "quux"},
 }
 
 func TestWalk(t *testing.T) {
@@ -88,7 +88,7 @@ func TestWalkError(t *testing.T) {
 
 func TestIgnore(t *testing.T) {
 	var patterns = map[string][]string{
-		"":        {"t2"},
+		".":       {"t2"},
 		"foo":     {"bar", "z*"},
 		"foo/baz": {"quux", ".*"},
 	}
@@ -97,6 +97,7 @@ func TestIgnore(t *testing.T) {
 		r bool
 	}{
 		{"foo/bar", true},
+		{"foofoo", false},
 		{"foo/quux", false},
 		{"foo/zuux", true},
 		{"foo/qzuux", false},
